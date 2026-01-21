@@ -1,0 +1,43 @@
+#!opentype
+
+# This file must be synced to `MM/instances`.
+# Entries `l` and `m` are required if this is not a typical
+#   style-linked Regular/Bold/Italic/BoldItalic family.
+
+# [PostScriptName]
+#   f=  Preferred Family Name
+#   s=  Subfamily Name (Style Name)
+#   l=  Compatible Family Menu Name
+#   m=1,Macintosh Compatible Full Name
+
+[Hind-Light]
+  f=  Hind
+  s=  Light
+  l=  Hind Light
+  m=1,Hind Light
+
+[Hind-Regular]
+  f=  Hind
+  s=  Regular
+  l=  Hind
+  m=1,Hind
+
+[Hind-Medium]
+  f=  Hind
+  s=  Medium
+  l=  Hind Medium
+  m=1,Hind Medium
+
+[Hind-SemiBold]
+  f=  Hind
+  s=  SemiBold
+  l=  Hind SemiBold
+  m=1,Hind SemiBold
+
+[Hind-Bold]
+  f=  Hind
+  s=  Bold
+  l=  Hind
+  m=1,Hind Bold
+# Style-linked because of `l` (the same as Regular's)
+#   and `styles/Bold/fontinfo` (`IsBoldStyle true`).
