@@ -1,144 +1,140 @@
 import streamlit as st
 from fpdf import FPDF
 from pdf2docx import Converter
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
+import pytesseract
+from pdf2image import convert_from_bytes
+from PIL import Image
 import os
 
-# --- APP CONFIGURATION ---
-st.set_page_config(page_title="Auto-Font PDF Editor", layout="wide")
-st.title("📄 Auto-Font Hindi & Typewriter Editor")
+# --- APP SETUP ---
+st.set_page_config(page_title="Hindi PDF Editor Pro", layout="wide")
+st.title("📄 Pro Hindi PDF Editor & Extractor")
 
-# --- AUTO-DETECT FONTS ---
-# Ye check karega ki aapne GitHub par font upload kiye hain ya nahi
+# --- FONTS SETUP (GitHub se auto-load) ---
 fonts = {
-    "Hindi": "Hindi.ttf",           # GitHub par file ka naam yahi hona chahiye
-    "Typewriter": "Typewriter.ttf", # GitHub par file ka naam yahi hona chahiye
-    "English": "Arial"              # Default system font
+    "Hindi": "Hindi.ttf",           
+    "Typewriter": "Typewriter.ttf" 
 }
+available_fonts = ["Arial (Default)"]
+if os.path.exists(fonts["Hindi"]): available_fonts.insert(0, "Hindi (Devanagari)")
+if os.path.exists(fonts["Typewriter"]): available_fonts.append("Typewriter (KrutiDev/Courier)")
 
-# Check availability
-available_fonts = ["Arial (Standard)"]
-if os.path.exists(fonts["Hindi"]):
-    available_fonts.insert(0, "Hindi (Automatic)")
-if os.path.exists(fonts["Typewriter"]):
-    available_fonts.append("Typewriter (Automatic)")
-
-# --- SIDEBAR ---
-menu = ["Edit PDF", "Create PDF", "Convert PDF to Word"]
+# --- MENU ---
+menu = ["Edit PDF (Advanced)", "Create New", "Convert"]
 choice = st.sidebar.selectbox("Select Tool", menu)
 
-# ============================
-# TOOL 1: EDIT EXISTING PDF
-# ============================
-if choice == "Edit PDF":
-    st.header("✏️ Edit PDF (Auto-Fonts)")
-    uploaded_file = st.file_uploader("PDF File Upload", type=['pdf'])
-
+# ==========================================
+# TOOL 1: EDIT PDF (WITH OCR SUPPORT)
+# ==========================================
+if choice == "Edit PDF (Advanced)":
+    st.header("✏️ Edit Hindi/English PDF")
+    
+    # 1. Upload
+    uploaded_file = st.file_uploader("PDF Upload Karein", type=['pdf'])
+    
+    # 2. Extraction Method Choice
+    st.info("Agar normal mode mein Hindi text nahi dikh raha, to niche 'OCR Mode' on karein.")
+    use_ocr = st.toggle("🔴 Use OCR Mode (Jab text na dikhe)", value=False)
+    
     if uploaded_file:
-        reader = PdfReader(uploaded_file)
         text_content = ""
-        for page in reader.pages:
-            text_content += (page.extract_text() or "") + "\n"
+        
+        # --- LOGIC: TEXT KAISE NIKALEIN? ---
+        if use_ocr:
+            with st.spinner("OCR chal raha hai (thoda time lagega)..."):
+                try:
+                    # PDF ko images mein badalna
+                    images = convert_from_bytes(uploaded_file.read())
+                    for img in images:
+                        # Hindi + English dono scan karega
+                        text_content += pytesseract.image_to_string(img, lang='hin+eng') + "\n"
+                except Exception as e:
+                    st.error(f"OCR Error: {e}. (Check packages.txt)")
+        else:
+            # Normal Extraction
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages:
+                text_content += (page.extract_text() or "") + "\n"
 
+        # --- EDITOR SCREEN ---
         col1, col2 = st.columns([2, 1])
+        
         with col1:
-            edited_text = st.text_area("Editor", value=text_content, height=400)
+            st.subheader("Edit Text Here:")
+            # Agar text khali hai to warning dega
+            if not text_content.strip():
+                st.warning("⚠️ Text nahi mila! Upar 'Use OCR Mode' button on karein.")
+                
+            edited_text = st.text_area("Editor", value=text_content, height=500)
         
         with col2:
-            st.subheader("Font Settings")
-            # Yahan ab user ko baar-baar upload nahi karna padega
-            selected_font_name = st.selectbox("Font Style Chunein:", available_fonts)
-            font_size = st.slider("Size", 10, 30, 14)
+            st.subheader("Save Settings")
+            sel_font = st.selectbox("Font Style", available_fonts)
+            font_size = st.slider("Font Size", 10, 30, 14)
             
-            # Agar koi aur font chahiye to option
-            custom_font = st.file_uploader("Koi aur font chahiye? (Optional)", type=['ttf'])
-
-        if st.button("Save & Download"):
-            pdf = FPDF()
-            pdf.add_page()
-
-            # --- SMART FONT LOGIC ---
-            font_path_to_use = None
-            font_family = "Arial"
-
-            # 1. Agar user ne abhi file upload ki hai
-            if custom_font:
-                with open("temp_user.ttf", "wb") as f:
-                    f.write(custom_font.read())
-                font_path_to_use = "temp_user.ttf"
-                font_family = "UserFont"
-            
-            # 2. Agar GitHub wala Hindi font select kiya
-            elif "Hindi" in selected_font_name and os.path.exists(fonts["Hindi"]):
-                font_path_to_use = fonts["Hindi"]
-                font_family = "HindiAuto"
-            
-            # 3. Agar GitHub wala Typewriter font select kiya
-            elif "Typewriter" in selected_font_name and os.path.exists(fonts["Typewriter"]):
-                font_path_to_use = fonts["Typewriter"]
-                font_family = "TypewriterAuto"
-            
-            # Font Register karna
-            if font_path_to_use:
-                try:
-                    pdf.add_font(font_family, '', font_path_to_use)
-                    pdf.set_font(font_family, size=font_size)
-                except Exception as e:
-                    st.error(f"Font Error: {e}")
+            if st.button("Save & Download PDF"):
+                pdf = FPDF()
+                pdf.add_page()
+                
+                # --- FONT SELECTION LOGIC ---
+                # 1. Hindi Font
+                if "Hindi" in sel_font and os.path.exists(fonts["Hindi"]):
+                    pdf.add_font("HindiFont", "", fonts["Hindi"])
+                    pdf.set_font("HindiFont", size=font_size)
+                
+                # 2. Typewriter Font
+                elif "Typewriter" in sel_font and os.path.exists(fonts["Typewriter"]):
+                    pdf.add_font("TypeFont", "", fonts["Typewriter"])
+                    pdf.set_font("TypeFont", size=font_size)
+                
+                # 3. Default
+                else:
                     pdf.set_font("Arial", size=font_size)
-            else:
-                pdf.set_font("Arial", size=font_size)
+                    if "Hindi" in sel_font: # Warning agar file missing hai
+                        st.warning("Hindi font file nahi mili! Arial use ho raha hai.")
 
-            # PDF Save
-            try:
-                pdf.multi_cell(0, 8, txt=edited_text)
-                pdf.output("final_output.pdf")
-                with open("final_output.pdf", "rb") as f:
-                    st.success("✅ PDF Ready!")
-                    st.download_button("📥 Download PDF", f, file_name="edited_doc.pdf")
-            except Exception as e:
-                st.error(f"Error: {e}. (Shayad Hindi text hai aur font select nahi kiya)")
+                # PDF Write
+                try:
+                    pdf.multi_cell(0, 10, txt=edited_text)
+                    pdf.output("edited_output.pdf")
+                    with open("edited_output.pdf", "rb") as f:
+                        st.success("✅ PDF Ban gayi!")
+                        st.download_button("📥 Download PDF", f, file_name="edited_hindi_doc.pdf")
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
-# ============================
-# TOOL 2: CREATE NEW PDF
-# ============================
-elif choice == "Create PDF":
-    st.header("📝 New Document")
-    user_input = st.text_area("Type here...", height=300)
-    
-    sel_font = st.selectbox("Font", available_fonts)
-    
+# ==========================================
+# TOOL 2: CREATE NEW (Same as before)
+# ==========================================
+elif choice == "Create New":
+    st.header("📝 Naya Document")
+    user_inp = st.text_area("Type karein...", height=300)
+    sel_f = st.selectbox("Font", available_fonts)
     if st.button("Generate"):
         pdf = FPDF()
         pdf.add_page()
-        
-        # Logic same as above (Simplified)
-        if "Hindi" in sel_font:
-            pdf.add_font("Hindi", "", fonts["Hindi"])
-            pdf.set_font("Hindi", size=14)
-        elif "Typewriter" in sel_font:
-            pdf.add_font("Typewriter", "", fonts["Typewriter"])
-            pdf.set_font("Typewriter", size=14)
-        else:
-            pdf.set_font("Arial", size=12)
-            
-        pdf.multi_cell(0, 10, user_input)
+        if "Hindi" in sel_f and os.path.exists(fonts["Hindi"]):
+            pdf.add_font("H", "", fonts["Hindi"])
+            pdf.set_font("H", size=14)
+        elif "Typewriter" in sel_f and os.path.exists(fonts["Typewriter"]):
+            pdf.add_font("T", "", fonts["Typewriter"])
+            pdf.set_font("T", size=14)
+        else: pdf.set_font("Arial", size=12)
+        pdf.multi_cell(0, 10, user_inp)
         pdf.output("new.pdf")
-        with open("new.pdf", "rb") as f:
-            st.download_button("Download", f, "new.pdf")
+        with open("new.pdf", "rb") as f: st.download_button("Download", f)
 
-# ============================
-# TOOL 3: CONVERT
-# ============================
-elif choice == "Convert PDF to Word":
-    st.subheader("Convert to Word")
-    f = st.file_uploader("Upload PDF", type='pdf')
-    if f and st.button("Convert"):
-        with open("temp.pdf", "wb") as file:
-            file.write(f.read())
+# ==========================================
+# TOOL 3: CONVERT (Same as before)
+# ==========================================
+elif choice == "Convert":
+    st.header("Convert PDF to Word")
+    u_file = st.file_uploader("PDF Upload", type='pdf')
+    if u_file and st.button("Convert"):
+        with open("temp.pdf", "wb") as f: f.write(u_file.read())
         cv = Converter("temp.pdf")
         cv.convert("conv.docx")
         cv.close()
-        with open("conv.docx", "rb") as file:
-            st.download_button("Download Word", file, "converted.docx")
+        with open("conv.docx", "rb") as f: st.download_button("Download Word", f)
             
