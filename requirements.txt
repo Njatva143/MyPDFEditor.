@@ -5,3 +5,10 @@ pypdf
 pytesseract
 pillow
 python-docx
+streamlit
+fpdf2
+pdf2docx
+pypdf
+pytesseract
+pillow
+pdf2image
