@@ -103,6 +103,46 @@ if choice == "Edit PDF (Advanced)":
                         st.download_button("📥 Download PDF", f, file_name="edited_hindi_doc.pdf")
                 except Exception as e:
                     st.error(f"Error: {e}")
+            # ... (Upar ka code waisa hi rahega) ...
+
+            if st.button("Save & Download PDF"):
+                pdf = FPDF()
+                pdf.add_page()
+                
+                # --- FINAL FONT LOGIC (Is logic ko dhyan se dekhein) ---
+                
+                # 1. Sabse pehle Hindi Font file ka pata lagayein
+                font_path = "Hindi.ttf"  # Make sure file name yahi ho
+                
+                # 2. Agar user ne 'Hindi' select kiya hai YA text mein Hindi hai
+                # Hum check karenge ki kya font file maujood hai?
+                if os.path.exists(font_path):
+                    try:
+                        # Hindi Font Register karein
+                        pdf.add_font('HindiFont', '', font_path)
+                        pdf.set_font('HindiFont', size=font_size)
+                    except Exception as e:
+                        st.error(f"Font Load Error: {e}")
+                        pdf.set_font("Arial", size=font_size)
+                else:
+                    # Agar Hindi.ttf file nahi mili toh warning dega
+                    st.warning("⚠️ 'Hindi.ttf' file nahi mili! Default Arial use ho raha hai (Hindi support nahi karega).")
+                    pdf.set_font("Arial", size=font_size)
+
+                # 3. PDF Write karna (Crash se bachne ke liye Try-Except)
+                try:
+                    pdf.multi_cell(0, 10, txt=edited_text)
+                    pdf.output("final_output.pdf")
+                    
+                    with open("final_output.pdf", "rb") as f:
+                        st.success("✅ PDF Ban gayi!")
+                        st.download_button("📥 Download PDF", f, file_name="edited_hindi_doc.pdf")
+                
+                except UnicodeEncodeError:
+                    st.error("❌ Error: Aap Hindi text save kar rahe hain lekin font 'Arial/Helvetica' select hai. Kripya GitHub par 'Hindi.ttf' upload karein.")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+                    
 
 # ==========================================
 # TOOL 2: CREATE NEW (Same as before)
