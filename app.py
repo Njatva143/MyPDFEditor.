@@ -8,13 +8,11 @@ import os
 
 # --- APP CONFIG ---
 st.set_page_config(page_title="Smart Hindi Editor", layout="wide")
-st.title("📄 Hindi Auto-Match & Convert Editor")
+st.title("📄 Hindi Auto-Match & Convert Editor (Final Fixed)")
 
 # --- AUTO-CONVERTER LOGIC (UNICODE TO KRUTI DEV) ---
 def unicode_to_krutidev(text):
-    # Ye ek basic mapping hai jo matrao aur aksharon ko convert karti hai
-    # Taki mobile ki hindi Kruti Dev font mein sahi dikhe
-    
+    # Basic mapping for common characters
     mapping = {
         '‘': '^', '’': '*', '“': 'Þ', '”': 'ß', '(': '¼', ')': '½',
         '{': '¿', '}': 'À', '[': '¬', ']': '­', '.': 'A', '-': '-',
@@ -31,18 +29,15 @@ def unicode_to_krutidev(text):
         'ा': 'k', 'ि': 'f', 'ी': 'h', 'ु': 'q', 'ू': 'w', 'ृ': '`', 'े': 's', 'ै': 'S',
         'ो': 'ks', 'ौ': 'kS', 'ं': 'a', 'ँ': '¡', 'ः': '%', '्': 'd', '़': '+'
     }
-    
-    # Simple replacement (Note: Matra placement needs complex logic, 
-    # but this handles 80% of typing cases)
     converted_text = ""
     for char in text:
         converted_text += mapping.get(char, char)
     return converted_text
 
-# --- FONT SETUP ---
+# --- FONT FILE NAMES ---
 fonts = {
-    "Modern": "Hindi.ttf",         # Hind/Mangal (Upload as Hindi.ttf)
-    "Typewriter": "Typewriter.ttf" # Kruti Dev 010 (Upload as Typewriter.ttf)
+    "Modern": "Hindi.ttf",         
+    "Typewriter": "Typewriter.ttf" 
 }
 
 # --- SIDEBAR ---
@@ -50,92 +45,72 @@ st.sidebar.header("🔧 Settings")
 mode = st.sidebar.radio("Mode:", ["Edit PDF", "Create New"])
 
 # ==========================================
-# LOGIC START
+# EDIT PDF MODE
 # ==========================================
 if mode == "Edit PDF":
     st.header("✏️ Auto-Match Font Editor")
     
-    # 1. Upload
     uploaded_file = st.file_uploader("PDF Upload Karein", type=['pdf'], key="upl")
     
-    # 2. Text Extraction
     text_content = ""
     if uploaded_file:
-        # OCR Toggle
         use_ocr = st.toggle("Use OCR (Agar text na dikhe)", value=False)
-        
         if use_ocr:
             with st.spinner("Scanning..."):
                 try:
                     images = convert_from_bytes(uploaded_file.read())
                     for img in images:
                         text_content += pytesseract.image_to_string(img, lang='hin+eng') + "\n"
-                except: st.error("OCR Error")
+                except: st.error("OCR Error (Check packages.txt)")
         else:
             reader = PdfReader(uploaded_file)
             for page in reader.pages:
                 text_content += (page.extract_text() or "") + "\n"
 
-    # 3. Editor & Font Matching
     col1, col2 = st.columns([2, 1])
-    
     with col1:
-        st.subheader("Edit Content")
         edited_text = st.text_area("Editor", value=text_content, height=450, key="editor")
     
     with col2:
-        st.subheader("🤖 Font Auto-Matcher")
-        st.write("PDF ka style kaisa hai?")
-        
-        # --- THE MAGIC SWITCH ---
-        font_style = st.radio("Style Chunein:", 
-                             ["Modern (Internet/Mobile jaisa)", 
-                              "Old Typewriter (Kacheri/Court jaisa)"])
-        
+        st.subheader("Font Settings")
+        font_style = st.radio("Style Chunein:", ["Modern (Hindi)", "Old Typewriter", "English (Default)"])
         font_size = st.slider("Text Size", 10, 30, 14)
-        
-        st.info("💡 **Note:** 'Old Typewriter' select karne par ye app aapke mobile waale text ko automatically convert kar dega.")
 
-    # 4. Save Button
-    if st.button("Match Font & Download", key="save_btn"):
+    if st.button("Download PDF", key="save_btn"):
         pdf = FPDF()
         pdf.add_page()
         
-        final_text_to_print = edited_text
-        selected_font = "Arial"
+        # --- FIXED FONT LOGIC (NO CRASH) ---
         
-        # --- AUTO CONVERSION LOGIC ---
+        # 1. Default Safety Font (Sabse pehle ye set karein)
+        pdf.set_font("Arial", size=font_size) 
+        
+        final_text = edited_text
+        
+        # 2. Try to set Custom Fonts
         if font_style == "Modern":
-            # Modern Hindi (Unicode)
             if os.path.exists(fonts["Modern"]):
-                pdf.add_font("Modern", "", fonts["Modern"])
-                pdf.set_font("Modern", size=font_size)
-                selected_font = "Modern"
+                pdf.add_font("ModernFont", "", fonts["Modern"])
+                pdf.set_font("ModernFont", size=font_size)
             else:
-                st.warning("Hindi.ttf nahi mila!")
+                st.warning(f"⚠️ '{fonts['Modern']}' file nahi mili! Default Arial use ho raha hai.")
 
         elif font_style == "Old Typewriter":
-            # Old Hindi (Kruti Dev)
             if os.path.exists(fonts["Typewriter"]):
-                pdf.add_font("Typewriter", "", fonts["Typewriter"])
-                pdf.set_font("Typewriter", size=font_size)
-                selected_font = "Typewriter"
-                
-                # *** AUTOMATIC CONVERSION ***
-                # Mobile Unicode -> Typewriter Code
-                final_text_to_print = unicode_to_krutidev(edited_text)
+                pdf.add_font("TypewriterFont", "", fonts["Typewriter"])
+                pdf.set_font("TypewriterFont", size=font_size)
+                # Auto Convert
+                final_text = unicode_to_krutidev(edited_text)
             else:
-                st.warning("Typewriter.ttf nahi mila!")
+                st.warning(f"⚠️ '{fonts['Typewriter']}' file nahi mili! Default Arial use ho raha hai.")
 
-        # --- PDF GENERATION ---
+        # 3. Save PDF
         try:
-            pdf.multi_cell(0, 10, txt=final_text_to_print)
-            pdf.output("matched_output.pdf")
-            
-            with open("matched_output.pdf", "rb") as f:
-                st.success(f"✅ Font Matched: {selected_font}")
-                st.download_button("📥 Download Result", f, file_name="matched_doc.pdf", key="dl_final")
-                
+            pdf.multi_cell(0, 10, txt=final_text)
+            pdf.output("final.pdf")
+            with open("final.pdf", "rb") as f:
+                st.success("✅ PDF Ready!")
+                st.download_button("📥 Download Result", f, file_name="doc.pdf")
         except Exception as e:
             st.error(f"Error: {e}")
 
@@ -143,26 +118,26 @@ if mode == "Edit PDF":
 # CREATE NEW MODE
 # ==========================================
 elif mode == "Create New":
-    st.header("📝 Create New (With Auto-Convert)")
+    st.header("📝 Create New Document")
     user_inp = st.text_area("Type here...", height=300)
-    
-    style = st.selectbox("Font Style", ["Modern", "Old Typewriter"])
+    style = st.selectbox("Font Style", ["Modern (Hindi)", "Old Typewriter", "English"])
     
     if st.button("Generate"):
         pdf = FPDF()
         pdf.add_page()
         
+        # Safety Font First
+        pdf.set_font("Arial", size=12)
+        
         final_txt = user_inp
         
-        if style == "Modern" and os.path.exists(fonts["Modern"]):
+        if style == "Modern (Hindi)" and os.path.exists(fonts["Modern"]):
             pdf.add_font("M", "", fonts["Modern"])
             pdf.set_font("M", size=14)
         elif style == "Old Typewriter" and os.path.exists(fonts["Typewriter"]):
             pdf.add_font("T", "", fonts["Typewriter"])
             pdf.set_font("T", size=14)
-            final_txt = unicode_to_krutidev(user_inp) # Auto Convert here too
-        else:
-            pdf.set_font("Arial", size=12)
+            final_txt = unicode_to_krutidev(user_inp)
             
         pdf.multi_cell(0, 10, final_txt)
         pdf.output("new.pdf")
