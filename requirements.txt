@@ -12,3 +12,11 @@ pypdf
 pytesseract
 pillow
 pdf2image
+streamlit
+fpdf2
+pdf2docx
+pypdf
+pdf2image
+pytesseract
+pillow
+
