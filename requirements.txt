@@ -1,6 +1,7 @@
 streamlit
-pdf2docx
-streamlit
-streamlit-image-coordinates
+pdf2image
 Pillow
-
+streamlit-image-coordinates
+fpdf2
+pdf2docx
+pytesseract
