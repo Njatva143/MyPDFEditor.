@@ -1,23 +1,23 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 from streamlit_image_coordinates import streamlit_image_coordinates
+from pdf2image import convert_from_bytes
 import io
 import os
 
-st.set_page_config(page_title="Photo Text Editor", layout="wide")
-st.title("🖼️ Image Text Replacer (Photo Editor)")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Click Editor (PDF + Image)", layout="wide")
+st.title("🖱️ Click & Edit (PDF & Images)")
 
-# --- FONT SETUP ---
-# Fonts wahi purane folders se uthayega
+# --- FONTS SETUP ---
 fonts = {
     "Typewriter (Kruti Dev)": "Typewriter.ttf", 
     "Hindi (Mangal/Hind)": "Hindi.ttf",
-    "English (Bold)": "arial.ttf" # System font fallback
+    "English (Arial)": "arial.ttf"
 }
 
 # --- HELPER: KRUTI DEV CONVERTER ---
 def convert_to_kruti(text):
-    # Simple converter logic for display
     text = text.replace("त्र", "=k").replace("ज्ञ", "%").replace("श्र", "J")
     chars = list(text)
     i = 0
@@ -43,112 +43,89 @@ def convert_to_kruti(text):
     return new_text
 
 # --- SESSION STATE ---
-if "img_edits" not in st.session_state:
-    st.session_state["img_edits"] = []
+if "edits" not in st.session_state:
+    st.session_state["edits"] = []
 
-# --- SIDEBAR CONTROLS ---
-st.sidebar.header("✏️ Editor Settings")
+# --- SIDEBAR SETTINGS ---
+st.sidebar.header("✏️ Edit Settings")
 
-# 1. Text Settings
-new_text = st.sidebar.text_input("Naya Text Likhein:", "Yahan Likhein")
+# 1. Text Controls
+new_text = st.sidebar.text_input("Naya Text:", "New Value")
 font_choice = st.sidebar.selectbox("Font Style", list(fonts.keys()))
-f_size = st.sidebar.slider("Font Size", 10, 100, 30)
+f_size = st.sidebar.slider("Font Size", 10, 100, 24)
 text_color = st.sidebar.color_picker("Text Color", "#000000")
 
-# 2. Patch Settings (Whitener)
+# 2. Patch Controls (Whitener)
 st.sidebar.markdown("---")
-st.sidebar.write("🧹 **Purana Text Chupana (Patch):**")
-use_patch = st.sidebar.checkbox("Patch Lagayein?", value=True)
-patch_color = st.sidebar.color_picker("Background/Paper Color Match Karein", "#FFFFFF")
-# Agar paper purana/yellow hai to upar se color pick karein
+st.sidebar.write("🧹 **Patch (Whitener):**")
+use_patch = st.sidebar.checkbox("Patch On/Off", value=True)
+patch_color = st.sidebar.color_picker("Background Color", "#FFFFFF")
 
-# 3. Clear Button
-if st.sidebar.button("Undo Last Change"):
-    if st.session_state["img_edits"]:
-        st.session_state["img_edits"].pop()
+# 3. Undo Button
+if st.sidebar.button("Undo Last Click"):
+    if st.session_state["edits"]:
+        st.session_state["edits"].pop()
         st.rerun()
 
-# --- MAIN APP ---
-uploaded_img = st.file_uploader("Image Upload (JPG/PNG)", type=['jpg', 'jpeg', 'png'])
+if st.sidebar.button("Clear All"):
+    st.session_state["edits"] = []
+    st.rerun()
 
-if uploaded_img:
-    # Image Open
-    image = Image.open(uploaded_img).convert("RGB")
+# --- MAIN UPLOAD SECTION ---
+# Yahan maine PDF ka option jod diya hai
+uploaded_file = st.file_uploader("Upload File (PDF, JPG, PNG)", type=['pdf', 'jpg', 'png', 'jpeg'])
+
+if uploaded_file:
+    # --- FILE PROCESSING ---
+    image = None
     
-    # --- DRAW SAVED EDITS ---
-    draw = ImageDraw.Draw(image)
-    
-    for edit in st.session_state["img_edits"]:
-        x, y, txt, fname, fsize, tcol, pcol, do_patch = edit
-        
-        # Font Load
-        fpath = fonts[fname]
+    # Check karein file PDF hai ya Image
+    if uploaded_file.name.lower().endswith('.pdf'):
+        # PDF to Image Conversion
         try:
-            if os.path.exists(fpath):
-                fnt = ImageFont.truetype(fpath, fsize)
+            images = convert_from_bytes(uploaded_file.read())
+            
+            # Agar PDF mein zyada pages hain to select karne ka option denge
+            if len(images) > 1:
+                page_sel = st.number_input("Page Number Select Karein", 1, len(images), 1)
+                image = images[page_sel-1] # 0-index adjust
             else:
-                fnt = ImageFont.load_default()
-        except: fnt = ImageFont.load_default()
-        
-        # Typewriter Conversion
-        final_txt = txt
-        if "Typewriter" in fname:
-            final_txt = convert_to_kruti(txt)
-            
-        # Draw Patch (Background Chupana)
-        if do_patch:
-            bbox = draw.textbbox((x, y), final_txt, font=fnt)
-            # Thoda padding dete hain taaki purana text pura dhak jaye
-            padded_box = (bbox[0]-2, bbox[1]-2, bbox[2]+2, bbox[3]+2)
-            draw.rectangle(padded_box, fill=pcol)
-            
-        # Draw Text
-        draw.text((x, y), final_txt, font=fnt, fill=tcol)
-
-        # --- SHOW IMAGE & CLICK ---
-    st.markdown("---")
-    st.write("👇 **Image par wahan CLICK karein jahan text badalna hai:**")
-    
-    # 1. PEHLE CHECK KAREIN KI IMAGE HAI YA NAHI
-    if image:
-        try:
-            # Ye component click capture karega
-            value = streamlit_image_coordinates(image, key="img_click")
-            
-            if value is not None:
-                # Check Duplicate Click
-                last_pt = st.session_state["img_edits"][-1] if st.session_state["img_edits"] else None
-                is_dup = False
-                if last_pt:
-                    if abs(last_pt[0] - value['x']) < 10 and abs(last_pt[1] - value['y']) < 10:
-                        is_dup = True
-                        
-                if not is_dup:
-                    # Store Edit
-                    st.session_state["img_edits"].append(
-                        (value['x'], value['y'], new_text, font_choice, f_size, text_color, patch_color, use_patch)
-                    )
-                    st.rerun()
+                image = images[0] # Pehla page
         except Exception as e:
-            # Agar upar wala component fail ho jaye, to ye Error dikhayega
-            st.error(f"Clickable Image load nahi hui. Error: {e}")
-            st.warning("Niche Normal Image dikh rahi hai (Lekin click kaam nahi karega):")
-            st.image(image, caption="Uploaded Image (View Only)")
+            st.error(f"PDF Error: {e}. (Kya packages.txt mein poppler-utils hai?)")
     else:
-        st.error("Image object khali hai. Shayad upload fail ho gaya.")
+        # Image Handling
+        image = Image.open(uploaded_file).convert("RGB")
 
-    # --- DOWNLOAD ---
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        # Save as JPG
-        buf_jpg = io.BytesIO()
-        image.save(buf_jpg, format="JPEG")
-        st.download_button("📥 Download as Image (JPG)", buf_jpg.getvalue(), "edited_image.jpg")
-    
-    with col2:
-        # Save as PDF
-        buf_pdf = io.BytesIO()
-        image.save(buf_pdf, format="PDF")
-        st.download_button("📥 Download as PDF", buf_pdf.getvalue(), "edited_image.pdf")
+    # --- IF IMAGE IS READY ---
+    if image:
+        # Draw previous edits
+        draw = ImageDraw.Draw(image)
         
+        for edit in st.session_state["edits"]:
+            x, y, txt, fname, fsz, tcl, pcl, pch = edit
+            
+            # Font Load
+            fpath = fonts[fname]
+            try:
+                if os.path.exists(fpath):
+                    fnt = ImageFont.truetype(fpath, fsz)
+                else:
+                    fnt = ImageFont.load_default()
+            except: fnt = ImageFont.load_default()
+            
+            # Convert text if typewriter
+            final_txt = txt
+            if "Typewriter" in fname:
+                final_txt = convert_to_kruti(txt)
+            
+            # Draw Patch
+            if pch:
+                bbox = draw.textbbox((x, y), final_txt, font=fnt)
+                # Thoda padding
+                pbox = (bbox[0]-5, bbox[1]-2, bbox[2]+5, bbox[3]+2)
+                draw.rectangle(pbox, fill=pcl)
+            
+            # Draw Text
+            draw.text((x, y), final
+            
