@@ -1,156 +1,150 @@
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
-from streamlit_image_coordinates import streamlit_image_coordinates
+from streamlit_drawable_canvas import st_canvas
 from pdf2image import convert_from_bytes
+from pdf2docx import Converter
+from fpdf import FPDF
+from PIL import Image
+from docx import Document
 import io
 import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Click Editor (Final)", layout="wide")
-st.title("🖱️ Click & Edit (PDF & Images)")
+st.set_page_config(page_title="All-in-One Editor & Converter", layout="wide")
+st.title("🛠️ All-in-One: Editor & Universal Converter")
 
-# --- FONTS SETUP ---
-fonts = {
-    "Typewriter (Kruti Dev)": "Typewriter.ttf", 
-    "Hindi (Mangal/Hind)": "Hindi.ttf",
-    "English (Arial)": "arial.ttf"
-}
+# --- SIDEBAR MENU ---
+st.sidebar.title("🚀 Menu")
+app_mode = st.sidebar.radio("Select Tool:", ["Direct Canvas Editor (Paint)", "Universal Converter"])
 
-# --- HELPER: KRUTI DEV CONVERTER ---
-def convert_to_kruti(text):
-    text = text.replace("त्र", "=k").replace("ज्ञ", "%").replace("श्र", "J")
-    chars = list(text)
-    i = 0
-    while i < len(chars):
-        if chars[i] == 'ि':
-            if i > 0:
-                prev = chars[i-1]
-                chars[i-1] = 'f'
-                chars[i] = prev
-        i += 1
-    text = "".join(chars)
-    mapping = {
-        'ा': 'k', 'ी': 'h', 'ु': 'q', 'ू': 'w', 'ृ': '`', 'े': 's', 'ै': 'S',
-        'ो': 'ks', 'ौ': 'kS', 'ं': 'a', 'ँ': '¡', 'ः': '%', '्': 'd', '़': '+',
-        'क': 'd', 'ख': '[', 'ग': 'x', 'घ': '?', 'च': 'p', 'छ': 'N', 'ज': 't', 'झ': '>',
-        'ट': 'V', 'ठ': 'B', 'ड': 'M', 'ढ': '<', 'ण': '.', 'त': 'r', 'थ': 'F', 'द': 'n',
-        'ध': 'è', 'न': 'u', 'प': 'i', 'फ': 'Q', 'ब': 'c', 'भ': 'H', 'म': 'e', 'य': ';',
-        'र': 'j', 'ल': 'y', 'व': 'b', 'श': 'M', 'ष': 'k', 'स': 'l', 'ह': 'v',
-        '०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
-    }
-    new_text = ""
-    for c in text: new_text += mapping.get(c, c)
-    return new_text
+# ==================================================
+# SECTION 1: DIRECT CANVAS EDITOR (PAINT STYLE)
+# ==================================================
+if app_mode == "Direct Canvas Editor (Paint)":
+    st.header("🎨 Direct Paint Editor (No Box)")
+    st.markdown("PDF/Image upload karein, **Eraser** se mitayein aur **Text** se likhein.")
 
-# --- SESSION STATE ---
-if "edits" not in st.session_state:
-    st.session_state["edits"] = []
+    # Upload
+    uploaded_file = st.file_uploader("Upload File (PDF/JPG)", type=["pdf", "jpg", "png"], key="canvas_upl")
 
-# --- SIDEBAR SETTINGS ---
-st.sidebar.header("✏️ Edit Settings")
+    # Tools
+    col1, col2 = st.columns(2)
+    with col1:
+        drawing_mode = st.selectbox(
+            "Tool Chunein:",
+            ("transform", "rect", "freedraw", "text"),
+            format_func=lambda x: {"transform": "🖐 Move/Hand", "rect": "⬜ Eraser Box", "freedraw": "🖌️ White Brush", "text": "🔤 Write Text"}.get(x, x)
+        )
+    with col2:
+        stroke_width = st.slider("Brush/Text Size", 1, 50, 15)
 
-# Text Controls
-new_text = st.sidebar.text_input("Naya Text:", "New Value")
-font_choice = st.sidebar.selectbox("Font Style", list(fonts.keys()))
-f_size = st.sidebar.slider("Font Size", 10, 100, 24)
-text_color = st.sidebar.color_picker("Text Color", "#000000")
+    # Logic
+    stroke_color = "#000000"
+    if drawing_mode == "text":
+        stroke_color = st.color_picker("Text Color", "#000000")
+    elif drawing_mode in ["rect", "freedraw"]:
+        stroke_color = "#FFFFFF" # Eraser hamesha white
 
-# Patch Controls
-st.sidebar.markdown("---")
-st.sidebar.write("🧹 **Patch (Whitener):**")
-use_patch = st.sidebar.checkbox("Patch On/Off", value=True)
-patch_color = st.sidebar.color_picker("Background Color", "#FFFFFF")
-
-# Undo Button
-if st.sidebar.button("Undo Last Click"):
-    if st.session_state["edits"]:
-        st.session_state["edits"].pop()
-        st.rerun()
-
-if st.sidebar.button("Clear All"):
-    st.session_state["edits"] = []
-    st.rerun()
-
-# --- MAIN UPLOAD SECTION ---
-uploaded_file = st.file_uploader("Upload File (PDF, JPG, PNG)", type=['pdf', 'jpg', 'png', 'jpeg'])
-
-if uploaded_file:
-    image = None
-    
-    # Check PDF vs Image
-    if uploaded_file.name.lower().endswith('.pdf'):
-        try:
-            images = convert_from_bytes(uploaded_file.read())
-            if len(images) > 1:
-                page_sel = st.number_input("Page Number", 1, len(images), 1)
-                image = images[page_sel-1]
-            else:
-                image = images[0]
-        except Exception as e:
-            st.error(f"PDF Error: {e}. (Check packages.txt)")
-    else:
-        image = Image.open(uploaded_file).convert("RGB")
-
-    # --- IF IMAGE READY ---
-    if image:
-        draw = ImageDraw.Draw(image)
-        
-        # Draw previous edits
-        for edit in st.session_state["edits"]:
-            x, y, txt, fname, fsz, tcl, pcl, pch = edit
-            
-            # Font Load
-            fpath = fonts[fname]
+    if uploaded_file:
+        image = None
+        if uploaded_file.name.lower().endswith(".pdf"):
             try:
-                if os.path.exists(fpath):
-                    fnt = ImageFont.truetype(fpath, fsz)
-                else:
-                    fnt = ImageFont.load_default()
-            except: fnt = ImageFont.load_default()
-            
-            # Text Convert
-            final_txt = txt
-            if "Typewriter" in fname:
-                final_txt = convert_to_kruti(txt)
-            
-            # Draw Patch
-            if pch:
-                try:
-                    bbox = draw.textbbox((x, y), final_txt, font=fnt)
-                    pbox = (bbox[0]-5, bbox[1]-2, bbox[2]+5, bbox[3]+2)
-                    draw.rectangle(pbox, fill=pcl)
-                except: pass # Error handling for old pillow versions
-            
-            # Draw Text (THIS WAS THE ERROR LINE)
-            draw.text((x, y), final_txt, font=fnt, fill=tcl)
+                images = convert_from_bytes(uploaded_file.read())
+                image = images[0] # First page
+            except: st.error("PDF Error: Poppler missing.")
+        else:
+            image = Image.open(uploaded_file)
 
-        # --- CLICK INTERFACE ---
-        st.write("👇 **Wahan Click karein jahan edit karna hai:**")
-        
-        value = streamlit_image_coordinates(image, key="click_area")
-        
-        if value is not None:
-            last = st.session_state["edits"][-1] if st.session_state["edits"] else None
-            is_dup = False
-            if last:
-                if abs(last[0] - value['x']) < 10 and abs(last[1] - value['y']) < 10:
-                    is_dup = True
-            
-            if not is_dup:
-                st.session_state["edits"].append(
-                    (value['x'], value['y'], new_text, font_choice, f_size, text_color, patch_color, use_patch)
-                )
-                st.rerun()
+        if image:
+            # Resize for screen
+            canvas_width = 800
+            w_percent = (canvas_width / float(image.size[0]))
+            canvas_height = int((float(image.size[1]) * float(w_percent)))
+            bg_image = image.resize((canvas_width, canvas_height))
 
-        # --- DOWNLOAD ---
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            buf = io.BytesIO()
-            image.save(buf, format="PDF")
-            st.download_button("📥 Download PDF", buf.getvalue(), file_name="edited.pdf")
+            # Canvas
+            canvas_result = st_canvas(
+                fill_color="rgba(255, 255, 255, 1)", # White fill for eraser box
+                stroke_width=stroke_width,
+                stroke_color=stroke_color,
+                background_image=bg_image,
+                height=canvas_height,
+                width=canvas_width,
+                drawing_mode=drawing_mode,
+                key="canvas",
+            )
+
+            if st.button("💾 Save Edited PDF"):
+                if canvas_result.image_data is not None:
+                    edited_frame = Image.fromarray(canvas_result.image_data.astype("uint8"), mode="RGBA")
+                    final_output = bg_image.convert("RGBA")
+                    final_output.alpha_composite(edited_frame)
+                    final_output = final_output.convert("RGB")
+                    
+                    buf = io.BytesIO()
+                    final_output.save(buf, format="PDF")
+                    st.success("Ready!")
+                    st.download_button("Download PDF", buf.getvalue(), "edited.pdf")
+
+# ==================================================
+# SECTION 2: UNIVERSAL CONVERTER
+# ==================================================
+elif app_mode == "Universal Converter":
+    st.header("🔄 Universal Format Converter")
+    
+    # Create 3 Tabs
+    tab1, tab2, tab3 = st.tabs(["📄 PDF to Word", "📝 Word to PDF", "🖼️ Image to PDF"])
+
+    # --- TAB 1: PDF TO WORD ---
+    with tab1:
+        st.subheader("Convert PDF -> Editable Word")
+        p2w_file = st.file_uploader("PDF Upload", type=['pdf'], key="p2w")
         
-        with col2:
-            buf_j = io.BytesIO()
-            image.save(buf_j, format="JPEG")
+        if p2w_file and st.button("Convert to Word"):
+            with st.spinner("Converting..."):
+                with open("temp.pdf", "wb") as f: f.write(p2w_file.read())
+                cv = Converter("temp.pdf")
+                cv.convert("converted.docx")
+                cv.close()
+                with open("converted.docx", "rb") as f:
+                    st.download_button("📥 Download Word (.docx)", f, "converted.docx")
+                os.remove("temp.pdf")
+
+    # --- TAB 2: WORD TO PDF ---
+    with tab2:
+        st.subheader("Convert Word -> PDF")
+        w2p_file = st.file_uploader("Word Upload", type=['docx'], key="w2p")
+        
+        if w2p_file and st.button("Convert to PDF"):
+            # Simple Text-Based Conversion (Linux Safe)
+            doc = Document(w2p_file)
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
             
+            for para in doc.paragraphs:
+                # Basic ASCII conversion to prevent crash on Linux
+                text = para.text.encode('latin-1', 'replace').decode('latin-1')
+                pdf.multi_cell(0, 10, txt=text)
+            
+            pdf_out = pdf.output(dest='S').encode('latin-1')
+            st.download_button("📥 Download PDF", pdf_out, "converted_from_word.pdf")
+            st.caption("Note: Complex formatting might change on Linux servers.")
+
+    # --- TAB 3: IMAGE TO PDF ---
+    with tab3:
+        st.subheader("Convert Image -> PDF")
+        img_files = st.file_uploader("Images Upload (Multiple Allowed)", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="i2p")
+        
+        if img_files and st.button("Convert Images to PDF"):
+            pil_images = []
+            for img_file in img_files:
+                img = Image.open(img_file).convert("RGB")
+                pil_images.append(img)
+            
+            if pil_images:
+                buf = io.BytesIO()
+                # Save pehli image aur baaki ko append karein
+                pil_images[0].save(buf, format="PDF", save_all=True, append_images=pil_images[1:])
+                st.success("✅ Images Combined into PDF!")
+                st.download_button("📥 Download PDF", buf.getvalue(), "images_combined.pdf")
+                
