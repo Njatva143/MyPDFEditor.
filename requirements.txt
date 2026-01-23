@@ -1,7 +1,8 @@
 streamlit
+streamlit-drawable-canvas
 pdf2image
-Pillow
-streamlit-image-coordinates
-fpdf2
 pdf2docx
-pytesseract
+python-docx
+fpdf2
+Pillow
+numpy
