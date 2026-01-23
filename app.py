@@ -105,26 +105,37 @@ if uploaded_img:
         # Draw Text
         draw.text((x, y), final_txt, font=fnt, fill=tcol)
 
-    # --- SHOW IMAGE & CLICK ---
+        # --- SHOW IMAGE & CLICK ---
+    st.markdown("---")
     st.write("👇 **Image par wahan CLICK karein jahan text badalna hai:**")
     
-    # Click Capture
-    value = streamlit_image_coordinates(image, key="img_click")
-    
-    if value is not None:
-        # Check Duplicate Click
-        last_pt = st.session_state["img_edits"][-1] if st.session_state["img_edits"] else None
-        is_dup = False
-        if last_pt:
-            if abs(last_pt[0] - value['x']) < 10 and abs(last_pt[1] - value['y']) < 10:
-                is_dup = True
-                
-        if not is_dup:
-            # Store Edit
-            st.session_state["img_edits"].append(
-                (value['x'], value['y'], new_text, font_choice, f_size, text_color, patch_color, use_patch)
-            )
-            st.rerun()
+    # 1. PEHLE CHECK KAREIN KI IMAGE HAI YA NAHI
+    if image:
+        try:
+            # Ye component click capture karega
+            value = streamlit_image_coordinates(image, key="img_click")
+            
+            if value is not None:
+                # Check Duplicate Click
+                last_pt = st.session_state["img_edits"][-1] if st.session_state["img_edits"] else None
+                is_dup = False
+                if last_pt:
+                    if abs(last_pt[0] - value['x']) < 10 and abs(last_pt[1] - value['y']) < 10:
+                        is_dup = True
+                        
+                if not is_dup:
+                    # Store Edit
+                    st.session_state["img_edits"].append(
+                        (value['x'], value['y'], new_text, font_choice, f_size, text_color, patch_color, use_patch)
+                    )
+                    st.rerun()
+        except Exception as e:
+            # Agar upar wala component fail ho jaye, to ye Error dikhayega
+            st.error(f"Clickable Image load nahi hui. Error: {e}")
+            st.warning("Niche Normal Image dikh rahi hai (Lekin click kaam nahi karega):")
+            st.image(image, caption="Uploaded Image (View Only)")
+    else:
+        st.error("Image object khali hai. Shayad upload fail ho gaya.")
 
     # --- DOWNLOAD ---
     st.markdown("---")
