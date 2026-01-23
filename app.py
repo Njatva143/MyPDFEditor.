@@ -6,7 +6,7 @@ import io
 import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Click Editor (PDF + Image)", layout="wide")
+st.set_page_config(page_title="Click Editor (Final)", layout="wide")
 st.title("🖱️ Click & Edit (PDF & Images)")
 
 # --- FONTS SETUP ---
@@ -49,19 +49,19 @@ if "edits" not in st.session_state:
 # --- SIDEBAR SETTINGS ---
 st.sidebar.header("✏️ Edit Settings")
 
-# 1. Text Controls
+# Text Controls
 new_text = st.sidebar.text_input("Naya Text:", "New Value")
 font_choice = st.sidebar.selectbox("Font Style", list(fonts.keys()))
 f_size = st.sidebar.slider("Font Size", 10, 100, 24)
 text_color = st.sidebar.color_picker("Text Color", "#000000")
 
-# 2. Patch Controls (Whitener)
+# Patch Controls
 st.sidebar.markdown("---")
 st.sidebar.write("🧹 **Patch (Whitener):**")
 use_patch = st.sidebar.checkbox("Patch On/Off", value=True)
 patch_color = st.sidebar.color_picker("Background Color", "#FFFFFF")
 
-# 3. Undo Button
+# Undo Button
 if st.sidebar.button("Undo Last Click"):
     if st.session_state["edits"]:
         st.session_state["edits"].pop()
@@ -72,36 +72,30 @@ if st.sidebar.button("Clear All"):
     st.rerun()
 
 # --- MAIN UPLOAD SECTION ---
-# Yahan maine PDF ka option jod diya hai
 uploaded_file = st.file_uploader("Upload File (PDF, JPG, PNG)", type=['pdf', 'jpg', 'png', 'jpeg'])
 
 if uploaded_file:
-    # --- FILE PROCESSING ---
     image = None
     
-    # Check karein file PDF hai ya Image
+    # Check PDF vs Image
     if uploaded_file.name.lower().endswith('.pdf'):
-        # PDF to Image Conversion
         try:
             images = convert_from_bytes(uploaded_file.read())
-            
-            # Agar PDF mein zyada pages hain to select karne ka option denge
             if len(images) > 1:
-                page_sel = st.number_input("Page Number Select Karein", 1, len(images), 1)
-                image = images[page_sel-1] # 0-index adjust
+                page_sel = st.number_input("Page Number", 1, len(images), 1)
+                image = images[page_sel-1]
             else:
-                image = images[0] # Pehla page
+                image = images[0]
         except Exception as e:
-            st.error(f"PDF Error: {e}. (Kya packages.txt mein poppler-utils hai?)")
+            st.error(f"PDF Error: {e}. (Check packages.txt)")
     else:
-        # Image Handling
         image = Image.open(uploaded_file).convert("RGB")
 
-    # --- IF IMAGE IS READY ---
+    # --- IF IMAGE READY ---
     if image:
-        # Draw previous edits
         draw = ImageDraw.Draw(image)
         
+        # Draw previous edits
         for edit in st.session_state["edits"]:
             x, y, txt, fname, fsz, tcl, pcl, pch = edit
             
@@ -114,18 +108,49 @@ if uploaded_file:
                     fnt = ImageFont.load_default()
             except: fnt = ImageFont.load_default()
             
-            # Convert text if typewriter
+            # Text Convert
             final_txt = txt
             if "Typewriter" in fname:
                 final_txt = convert_to_kruti(txt)
             
             # Draw Patch
             if pch:
-                bbox = draw.textbbox((x, y), final_txt, font=fnt)
-                # Thoda padding
-                pbox = (bbox[0]-5, bbox[1]-2, bbox[2]+5, bbox[3]+2)
-                draw.rectangle(pbox, fill=pcl)
+                try:
+                    bbox = draw.textbbox((x, y), final_txt, font=fnt)
+                    pbox = (bbox[0]-5, bbox[1]-2, bbox[2]+5, bbox[3]+2)
+                    draw.rectangle(pbox, fill=pcl)
+                except: pass # Error handling for old pillow versions
             
-            # Draw Text
-            draw.text((x, y), final
+            # Draw Text (THIS WAS THE ERROR LINE)
+            draw.text((x, y), final_txt, font=fnt, fill=tcl)
+
+        # --- CLICK INTERFACE ---
+        st.write("👇 **Wahan Click karein jahan edit karna hai:**")
+        
+        value = streamlit_image_coordinates(image, key="click_area")
+        
+        if value is not None:
+            last = st.session_state["edits"][-1] if st.session_state["edits"] else None
+            is_dup = False
+            if last:
+                if abs(last[0] - value['x']) < 10 and abs(last[1] - value['y']) < 10:
+                    is_dup = True
+            
+            if not is_dup:
+                st.session_state["edits"].append(
+                    (value['x'], value['y'], new_text, font_choice, f_size, text_color, patch_color, use_patch)
+                )
+                st.rerun()
+
+        # --- DOWNLOAD ---
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            buf = io.BytesIO()
+            image.save(buf, format="PDF")
+            st.download_button("📥 Download PDF", buf.getvalue(), file_name="edited.pdf")
+        
+        with col2:
+            buf_j = io.BytesIO()
+            image.save(buf_j, format="JPEG")
             
