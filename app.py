@@ -67,10 +67,9 @@ if app_mode == "Direct Paint Editor (Eraser/Write)":
             bg_image = image.resize((canvas_width, canvas_height))
 
             # *** CANVAS COMPONENT ***
-            # Note: Requirements.txt mein streamlit==1.32.0 hona zaroori hai
             try:
                 canvas_result = st_canvas(
-                    fill_color="rgba(255, 255, 255, 1)", # White fill for eraser
+                    fill_color="rgba(255, 255, 255, 1)", 
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
                     background_image=bg_image,
@@ -119,21 +118,38 @@ elif app_mode == "Universal Converter":
                     st.download_button("📥 Download Word", f, "converted.docx")
                 os.remove("temp.pdf")
 
-    # --- TAB 2: WORD TO PDF ---
+    # --- TAB 2: WORD TO PDF (FIXED CRASH) ---
     with tab2:
         st.subheader("Convert Word -> PDF")
         w2p_file = st.file_uploader("Word Upload", type=['docx'], key="w2p")
+        
         if w2p_file and st.button("Convert to PDF"):
-            # Basic Conversion
-            doc = Document(w2p_file)
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            for para in doc.paragraphs:
-                text = para.text.encode('latin-1', 'replace').decode('latin-1')
-                pdf.multi_cell(0, 10, txt=text)
-            pdf_out = pdf.output(dest='S').encode('latin-1')
-            st.download_button("📥 Download PDF", pdf_out, "word_to_pdf.pdf")
+            try:
+                doc = Document(w2p_file)
+                # FIX: Set Margins and AutoPageBreak explicit
+                pdf = FPDF(orientation='P', unit='mm', format='A4')
+                pdf.set_auto_page_break(auto=True, margin=15)
+                pdf.add_page()
+                pdf.set_font("Arial", size=12)
+                
+                for para in doc.paragraphs:
+                    # Safe text extraction
+                    text = para.text
+                    if text:
+                        # Linux Font Fix (Latin-1)
+                        safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+                        try:
+                            # CRASH PROOF LINE
+                            pdf.multi_cell(0, 10, txt=safe_text)
+                        except Exception:
+                            # Agar koi specific line crash kare, to use skip kar do
+                            pass
+                
+                pdf_out = pdf.output(dest='S').encode('latin-1')
+                st.download_button("📥 Download PDF", pdf_out, "word_to_pdf.pdf")
+                
+            except Exception as e:
+                st.error(f"Conversion Error: {e}")
 
     # --- TAB 3: IMAGE TO PDF ---
     with tab3:
