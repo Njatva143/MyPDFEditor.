@@ -1,4 +1,15 @@
 import streamlit as st
+
+# --- 🛠️ MAGIC PATCH (YE ERROR KO JABARDASTI THEEK KAREGA) ---
+# Is code ko mat chedhna, yehi wo dawa hai jo canvas ko chalayegi
+import streamlit.elements.image as st_image
+try:
+    from streamlit.elements.utils import image_to_url
+    st_image.image_to_url = image_to_url
+except ImportError:
+    pass
+# -------------------------------------------------------------
+
 from streamlit_drawable_canvas import st_canvas
 from pdf2image import convert_from_bytes
 from pdf2docx import Converter
@@ -44,7 +55,7 @@ st.sidebar.title("🚀 Main Menu")
 app_mode = st.sidebar.radio("Kya karna hai?", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
 
 # ==================================================
-# 1. PDF DIRECT EDITOR (Working Paint Tool)
+# 1. PDF DIRECT EDITOR
 # ==================================================
 if app_mode == "✏️ PDF Direct Editor":
     st.header("✏️ PDF Direct Editor")
@@ -118,7 +129,6 @@ if app_mode == "✏️ PDF Direct Editor":
                 )
             except Exception as e:
                 st.error(f"❌ Canvas Error: {e}")
-                st.info("👉 Solution: Ensure 'requirements.txt' has 'streamlit==1.32.0'")
 
             # SAVE BUTTON
             st.markdown("---")
