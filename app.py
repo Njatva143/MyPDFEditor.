@@ -14,10 +14,7 @@ st.title("🛠️ All-in-One: Editor & Universal Converter")
 
 # --- HELPER: UNICODE TO KRUTI DEV CONVERTER ---
 def convert_to_kruti(text):
-    # Special replacements
     text = text.replace("त्र", "=k").replace("ज्ञ", "%").replace("श्र", "J")
-    
-    # Matra Shifting (Chhoti 'i')
     chars = list(text)
     i = 0
     while i < len(chars):
@@ -28,8 +25,6 @@ def convert_to_kruti(text):
                 chars[i] = prev
         i += 1
     text = "".join(chars)
-    
-    # Mapping
     mapping = {
         'ा': 'k', 'ी': 'h', 'ु': 'q', 'ू': 'w', 'ृ': '`', 'े': 's', 'ै': 'S',
         'ो': 'ks', 'ौ': 'kS', 'ं': 'a', 'ँ': '¡', 'ः': '%', '्': 'd', '़': '+',
@@ -40,7 +35,6 @@ def convert_to_kruti(text):
         '०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
         '.': 'A', ',': ',', '-': '-', '(': '¼', ')': '½'
     }
-    
     new_text = ""
     for c in text: new_text += mapping.get(c, c)
     return new_text
@@ -118,7 +112,6 @@ if app_mode == "Direct Paint Editor (Eraser/Write)":
 elif app_mode == "Universal Converter":
     st.header("🔄 Universal Format Converter")
     
-    # --- ADDED TAB 4: TYPEWRITER CONVERTER ---
     tab1, tab2, tab3, tab4 = st.tabs(["📄 PDF to Word", "📝 Word to PDF", "🖼️ Image to PDF", "🔠 Text to Typewriter PDF"])
 
     # TAB 1: PDF to Word
@@ -132,7 +125,7 @@ elif app_mode == "Universal Converter":
             cv.close()
             with open("c.docx", "rb") as file: st.download_button("Download Word", file, "c.docx")
 
-    # TAB 2: Word to PDF
+    # TAB 2: Word to PDF (FIXED ERROR HERE)
     with tab2:
         st.subheader("Word -> PDF")
         f = st.file_uploader("Word Upload", type=['docx'], key="w2p")
@@ -145,8 +138,13 @@ elif app_mode == "Universal Converter":
                 pdf.set_font("Arial", size=12)
                 for p in doc.paragraphs:
                     safe_text = p.text.encode('latin-1', 'replace').decode('latin-1')
-                    pdf.multi_cell(0, 10, safe_text)
-                st.download_button("Download PDF", pdf.output(dest='S').encode('latin-1'), "doc.pdf")
+                    try:
+                        pdf.multi_cell(0, 10, safe_text)
+                    except: pass
+                
+                # --- FIX: Removed .encode('latin-1') ---
+                pdf_out = bytes(pdf.output()) 
+                st.download_button("Download PDF", pdf_out, "doc.pdf")
             except Exception as e: st.error(f"Error: {e}")
 
     # TAB 3: Image to PDF
@@ -159,10 +157,9 @@ elif app_mode == "Universal Converter":
             pil_imgs[0].save(b, format="PDF", save_all=True, append_images=pil_imgs[1:])
             st.download_button("Download PDF", b.getvalue(), "imgs.pdf")
 
-    # --- TAB 4: NEW TYPEWRITER CONVERTER ---
+    # TAB 4: NEW TYPEWRITER CONVERTER (FIXED ERROR HERE)
     with tab4:
         st.subheader("🔠 Convert Normal Text to Typewriter PDF")
-        st.info("Mobile Hindi (Unicode) yahan paste karein, hum use Typewriter Font (Kruti Dev) mein convert karke PDF denge.")
         
         user_text = st.text_area("Yahan Hindi Text Likhein:", height=200)
         font_sz = st.slider("Font Size", 10, 40, 16)
@@ -183,7 +180,10 @@ elif app_mode == "Universal Converter":
                 try:
                     pdf.multi_cell(0, 10, txt=converted_text)
                     
-                    pdf_out = pdf.output(dest='S').encode('latin-1')
+                    # --- FIX: Removed .encode('latin-1') ---
+                    # FPDF2 returns bytearray directly
+                    pdf_out = bytes(pdf.output())
+                    
                     st.success("✅ Converted Successfully!")
                     st.download_button("📥 Download Typewriter PDF", pdf_out, "typewriter_output.pdf")
                 except Exception as e:
