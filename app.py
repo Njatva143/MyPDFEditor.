@@ -9,10 +9,10 @@ import io
 import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Ultimate Editor & Converter", layout="wide")
-st.title("🛠️ All-in-One: Editor & Universal Converter")
+st.set_page_config(page_title="PDF Editor & Converter", layout="wide")
+st.title("📄 Professional PDF Tool")
 
-# --- HELPER: UNICODE TO KRUTI DEV CONVERTER ---
+# --- HELPER: UNICODE TO KRUTI DEV ---
 def convert_to_kruti(text):
     text = text.replace("त्र", "=k").replace("ज्ञ", "%").replace("श्र", "J")
     chars = list(text)
@@ -39,50 +39,69 @@ def convert_to_kruti(text):
     for c in text: new_text += mapping.get(c, c)
     return new_text
 
-# --- SIDEBAR MENU ---
-st.sidebar.title("🚀 Menu")
-app_mode = st.sidebar.radio("Select Tool:", ["Direct Paint Editor (Eraser/Write)", "Universal Converter"])
+# --- MAIN MENU (SIDEBAR) ---
+st.sidebar.title("🚀 Main Menu")
+app_mode = st.sidebar.radio("Kya karna hai?", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
 
 # ==================================================
-# SECTION 1: DIRECT PAINT EDITOR
+# 1. PDF DIRECT EDITOR (The Main Request)
 # ==================================================
-if app_mode == "Direct Paint Editor (Eraser/Write)":
-    st.header("🎨 Direct Paint Editor")
-    
-    uploaded_file = st.file_uploader("Upload File (PDF/JPG)", type=["pdf", "jpg", "png"], key="canvas_upl")
-    
+if app_mode == "✏️ PDF Direct Editor":
+    st.header("✏️ PDF Direct Editor")
+    st.info("💡 **Kaise Edit Karein:** 'Eraser' tool se purana text mitayein aur 'Text' tool se naya likhein.")
+
+    # 1. Upload
+    uploaded_file = st.file_uploader("Edit karne ke liye PDF ya Image chunein", type=["pdf", "jpg", "png"], key="canvas_upl")
+
+    # 2. Tools Setup
     col1, col2 = st.columns(2)
     with col1:
         drawing_mode = st.selectbox(
-            "Tool Chunein:",
+            "Tool Select Karein:",
             ("transform", "rect", "text"),
-            format_func=lambda x: {"transform": "🖐 Move/Hand", "rect": "⬜ Eraser (White Box)", "text": "🔤 Write Text"}.get(x, x)
+            format_func=lambda x: {
+                "transform": "🖐 Haath (Move)", 
+                "rect": "⬜ Eraser (Mitane ke liye)", 
+                "text": "🔤 Text (Likhne ke liye)"
+            }.get(x, x)
         )
     with col2:
-        stroke_width = st.slider("Size", 1, 50, 15)
+        stroke_width = st.slider("Brush/Eraser Size", 1, 50, 15)
 
+    # Colors
     stroke_color = "#000000"
-    if drawing_mode == "text": stroke_color = st.color_picker("Text Color", "#000000")
-    elif drawing_mode == "rect": stroke_color = "#FFFFFF"
+    if drawing_mode == "text": 
+        stroke_color = st.color_picker("Text Color", "#000000")
+    elif drawing_mode == "rect": 
+        stroke_color = "#FFFFFF" # Eraser hamesha white rahega
 
     if uploaded_file:
         image = None
+        # PDF Handling
         if uploaded_file.name.lower().endswith(".pdf"):
             try:
                 images = convert_from_bytes(uploaded_file.read())
-                image = images[0]
-            except Exception as e: st.error(f"PDF Error: {e}")
+                # Agar PDF me zyada pages hain to select karne ka option
+                if len(images) > 1:
+                    pg = st.number_input("Page Number:", 1, len(images), 1)
+                    image = images[pg-1]
+                else:
+                    image = images[0]
+            except Exception as e: 
+                st.error(f"PDF Error: {e}. (Check packages.txt)")
         else:
             image = Image.open(uploaded_file)
 
         if image:
             image = image.convert("RGB")
-            # Canvas logic
+            
+            # Resize Logic (Screen Fit)
             canvas_width = 800
             w_percent = (canvas_width / float(image.size[0]))
             canvas_height = int((float(image.size[1]) * float(w_percent)))
             bg_image = image.resize((canvas_width, canvas_height))
 
+            # *** CANVAS COMPONENT ***
             try:
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 255, 255, 1)", 
@@ -94,29 +113,35 @@ if app_mode == "Direct Paint Editor (Eraser/Write)":
                     drawing_mode=drawing_mode,
                     key="canvas_editor",
                 )
-                
-                if st.button("💾 Save as PDF"):
-                    if canvas_result.image_data is not None:
-                        edited_frame = Image.fromarray(canvas_result.image_data.astype("uint8"), mode="RGBA")
-                        final_output = bg_image.convert("RGBA")
-                        final_output.alpha_composite(edited_frame)
-                        final_output = final_output.convert("RGB")
-                        buf = io.BytesIO()
-                        final_output.save(buf, format="PDF")
-                        st.download_button("📥 Download PDF", buf.getvalue(), "edited.pdf")
-            except: st.warning("Streamlit version error. Check requirements.txt")
+            except:
+                st.warning("⚠️ Version Error: 'requirements.txt' mein 'streamlit==1.32.0' likhein.")
+
+            # SAVE BUTTON
+            st.markdown("---")
+            if st.button("💾 Save & Download PDF"):
+                if canvas_result is not None and canvas_result.image_data is not None:
+                    # Combine layers
+                    edited_frame = Image.fromarray(canvas_result.image_data.astype("uint8"), mode="RGBA")
+                    final_output = bg_image.convert("RGBA")
+                    final_output.alpha_composite(edited_frame)
+                    final_output = final_output.convert("RGB")
+                    
+                    buf = io.BytesIO()
+                    final_output.save(buf, format="PDF")
+                    st.success("✅ PDF Edit Ho Gayi!")
+                    st.download_button("📥 Download Edited PDF", buf.getvalue(), "edited_doc.pdf")
 
 # ==================================================
-# SECTION 2: UNIVERSAL CONVERTER
+# 2. UNIVERSAL CONVERTER (Extra Tools)
 # ==================================================
-elif app_mode == "Universal Converter":
-    st.header("🔄 Universal Format Converter")
+elif app_mode == "🔄 Universal Converter":
+    st.header("🔄 Format Converters")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📄 PDF to Word", "📝 Word to PDF", "🖼️ Image to PDF", "🔠 Text to Typewriter PDF"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📄 PDF to Word", "📝 Word to PDF", "🖼️ Image to PDF", "🔠 Typewriter Converter"])
 
     # TAB 1: PDF to Word
     with tab1:
-        st.subheader("PDF -> Word")
+        st.subheader("PDF -> Editable Word")
         f = st.file_uploader("PDF Upload", type=['pdf'], key="p2w")
         if f and st.button("Convert to Word"):
             with open("t.pdf", "wb") as file: file.write(f.read())
@@ -125,7 +150,7 @@ elif app_mode == "Universal Converter":
             cv.close()
             with open("c.docx", "rb") as file: st.download_button("Download Word", file, "c.docx")
 
-    # TAB 2: Word to PDF (FIXED ERROR HERE)
+    # TAB 2: Word to PDF
     with tab2:
         st.subheader("Word -> PDF")
         f = st.file_uploader("Word Upload", type=['docx'], key="w2p")
@@ -138,12 +163,10 @@ elif app_mode == "Universal Converter":
                 pdf.set_font("Arial", size=12)
                 for p in doc.paragraphs:
                     safe_text = p.text.encode('latin-1', 'replace').decode('latin-1')
-                    try:
-                        pdf.multi_cell(0, 10, safe_text)
+                    try: pdf.multi_cell(0, 10, safe_text)
                     except: pass
                 
-                # --- FIX: Removed .encode('latin-1') ---
-                pdf_out = bytes(pdf.output()) 
+                pdf_out = bytes(pdf.output())
                 st.download_button("Download PDF", pdf_out, "doc.pdf")
             except Exception as e: st.error(f"Error: {e}")
 
@@ -157,37 +180,27 @@ elif app_mode == "Universal Converter":
             pil_imgs[0].save(b, format="PDF", save_all=True, append_images=pil_imgs[1:])
             st.download_button("Download PDF", b.getvalue(), "imgs.pdf")
 
-    # TAB 4: NEW TYPEWRITER CONVERTER (FIXED ERROR HERE)
+    # TAB 4: TYPEWRITER CONVERTER
     with tab4:
-        st.subheader("🔠 Convert Normal Text to Typewriter PDF")
-        
-        user_text = st.text_area("Yahan Hindi Text Likhein:", height=200)
+        st.subheader("🔠 Typewriter (Kruti Dev) PDF")
+        user_text = st.text_area("Hindi Text Paste Karein:", height=150)
         font_sz = st.slider("Font Size", 10, 40, 16)
         
-        if st.button("Convert & Download PDF"):
+        if st.button("Create Typewriter PDF"):
             if os.path.exists("Typewriter.ttf"):
                 pdf = FPDF()
                 pdf.add_page()
-                
-                # Load Typewriter Font
                 pdf.add_font("Kruti", "", "Typewriter.ttf")
                 pdf.set_font("Kruti", size=font_sz)
                 
-                # Convert Text Logic
                 converted_text = convert_to_kruti(user_text)
                 
-                # Write to PDF
                 try:
                     pdf.multi_cell(0, 10, txt=converted_text)
-                    
-                    # --- FIX: Removed .encode('latin-1') ---
-                    # FPDF2 returns bytearray directly
                     pdf_out = bytes(pdf.output())
-                    
-                    st.success("✅ Converted Successfully!")
-                    st.download_button("📥 Download Typewriter PDF", pdf_out, "typewriter_output.pdf")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.success("Converted!")
+                    st.download_button("📥 Download PDF", pdf_out, "typewriter.pdf")
+                except Exception as e: st.error(f"Error: {e}")
             else:
-                st.error("❌ 'Typewriter.ttf' file missing hai! GitHub par upload karein.")
+                st.error("❌ 'Typewriter.ttf' file missing hai!")
                 
