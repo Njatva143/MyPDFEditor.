@@ -44,11 +44,11 @@ st.sidebar.title("🚀 Main Menu")
 app_mode = st.sidebar.radio("Kya karna hai?", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
 
 # ==================================================
-# 1. PDF DIRECT EDITOR (The Main Request)
+# 1. PDF DIRECT EDITOR (Working Paint Tool)
 # ==================================================
 if app_mode == "✏️ PDF Direct Editor":
     st.header("✏️ PDF Direct Editor")
-    st.info("💡 **Kaise Edit Karein:** 'Eraser' tool se purana text mitayein aur 'Text' tool se naya likhein.")
+    st.info("💡 **Instructions:** Upload karein -> 'Eraser' (Rect) chunein -> Mitayein -> 'Text' se likhein.")
 
     # 1. Upload
     uploaded_file = st.file_uploader("Edit karne ke liye PDF ya Image chunein", type=["pdf", "jpg", "png"], key="canvas_upl")
@@ -81,26 +81,29 @@ if app_mode == "✏️ PDF Direct Editor":
         if uploaded_file.name.lower().endswith(".pdf"):
             try:
                 images = convert_from_bytes(uploaded_file.read())
-                # Agar PDF me zyada pages hain to select karne ka option
                 if len(images) > 1:
                     pg = st.number_input("Page Number:", 1, len(images), 1)
                     image = images[pg-1]
                 else:
                     image = images[0]
             except Exception as e: 
-                st.error(f"PDF Error: {e}. (Check packages.txt)")
+                st.error(f"❌ PDF Error: {e}")
+                st.warning("👉 Check packages.txt for poppler-utils")
         else:
             image = Image.open(uploaded_file)
 
         if image:
+            # FIX: Convert to RGB (Prevents blank screen)
             image = image.convert("RGB")
             
-            # Resize Logic (Screen Fit)
+            # Resize Logic
             canvas_width = 800
             w_percent = (canvas_width / float(image.size[0]))
             canvas_height = int((float(image.size[1]) * float(w_percent)))
             bg_image = image.resize((canvas_width, canvas_height))
 
+            st.write("👇 **Editor Box:**")
+            
             # *** CANVAS COMPONENT ***
             try:
                 canvas_result = st_canvas(
@@ -113,26 +116,29 @@ if app_mode == "✏️ PDF Direct Editor":
                     drawing_mode=drawing_mode,
                     key="canvas_editor",
                 )
-            except:
-                st.warning("⚠️ Version Error: 'requirements.txt' mein 'streamlit==1.32.0' likhein.")
+            except Exception as e:
+                st.error(f"❌ Canvas Error: {e}")
+                st.info("👉 Solution: Ensure 'requirements.txt' has 'streamlit==1.32.0'")
 
             # SAVE BUTTON
             st.markdown("---")
             if st.button("💾 Save & Download PDF"):
                 if canvas_result is not None and canvas_result.image_data is not None:
-                    # Combine layers
-                    edited_frame = Image.fromarray(canvas_result.image_data.astype("uint8"), mode="RGBA")
-                    final_output = bg_image.convert("RGBA")
-                    final_output.alpha_composite(edited_frame)
-                    final_output = final_output.convert("RGB")
-                    
-                    buf = io.BytesIO()
-                    final_output.save(buf, format="PDF")
-                    st.success("✅ PDF Edit Ho Gayi!")
-                    st.download_button("📥 Download Edited PDF", buf.getvalue(), "edited_doc.pdf")
+                    try:
+                        edited_frame = Image.fromarray(canvas_result.image_data.astype("uint8"), mode="RGBA")
+                        final_output = bg_image.convert("RGBA")
+                        final_output.alpha_composite(edited_frame)
+                        final_output = final_output.convert("RGB")
+                        
+                        buf = io.BytesIO()
+                        final_output.save(buf, format="PDF")
+                        st.success("✅ PDF Edit Ho Gayi!")
+                        st.download_button("📥 Download Edited PDF", buf.getvalue(), "edited_doc.pdf")
+                    except Exception as e:
+                        st.error(f"Save Error: {e}")
 
 # ==================================================
-# 2. UNIVERSAL CONVERTER (Extra Tools)
+# 2. UNIVERSAL CONVERTER
 # ==================================================
 elif app_mode == "🔄 Universal Converter":
     st.header("🔄 Format Converters")
