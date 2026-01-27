@@ -1,14 +1,16 @@
 import streamlit as st
 
-# --- 🛠️ MAGIC PATCH (Force Fix for Version Error) ---
-# Ye code sabse upar hona zaroori hai. Ye 'image_to_url' error ko gayab kar dega.
+# ==========================================
+# 🛑 ZARURI PATCH (Version Fixer)
+# Ye code Streamlit ke naye version ko forcefully theek karega
+# ==========================================
 import streamlit.elements.image as st_image
 try:
     from streamlit.elements.utils import image_to_url
     st_image.image_to_url = image_to_url
 except ImportError:
     pass
-# ---------------------------------------------------
+# ==========================================
 
 from streamlit_drawable_canvas import st_canvas
 from pdf2image import convert_from_bytes
@@ -23,11 +25,7 @@ import os
 st.set_page_config(page_title="PDF Editor & Converter", layout="wide")
 st.title("📄 Professional PDF Tool")
 
-# --- SIDEBAR MENU ---
-st.sidebar.title("🚀 Main Menu")
-app_mode = st.sidebar.radio("Go to:", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
-
-# --- HELPER FUNCTIONS ---
+# --- HELPER: UNICODE TO KRUTI ---
 def convert_to_kruti(text):
     text = text.replace("त्र", "=k").replace("ज्ञ", "%").replace("श्र", "J")
     chars = list(text)
@@ -54,6 +52,10 @@ def convert_to_kruti(text):
     for c in text: new_text += mapping.get(c, c)
     return new_text
 
+# --- MENU ---
+st.sidebar.title("🚀 Main Menu")
+app_mode = st.sidebar.radio("Go to:", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
+
 # ==================================================
 # 1. PDF DIRECT EDITOR
 # ==================================================
@@ -72,8 +74,8 @@ if app_mode == "✏️ PDF Direct Editor":
     if drawing_mode == "text": stroke_color = st.color_picker("Color", "#000000")
     elif drawing_mode == "rect": stroke_color = "#FFFFFF"
 
-    # --- SAFETY INIT ---
-    canvas_result = None # Ye line NameError rokegi
+    # --- INITIALIZE VARIABLE (Prevents NameError) ---
+    canvas_result = None
 
     if uploaded_file:
         image = None
@@ -112,8 +114,9 @@ if app_mode == "✏️ PDF Direct Editor":
                 )
             except Exception as e:
                 st.error(f"Canvas Error: {e}")
-                
+
             # Save Button
+            st.markdown("---")
             if st.button("💾 Save PDF"):
                 if canvas_result is not None and canvas_result.image_data is not None:
                     try:
@@ -127,7 +130,7 @@ if app_mode == "✏️ PDF Direct Editor":
                     except Exception as e:
                         st.error(f"Save failed: {e}")
                 else:
-                    st.warning("Kuch edit nahi kiya ya Canvas load nahi hua.")
+                    st.warning("Canvas load nahi hua ya koi edit nahi kiya.")
 
 # ==================================================
 # 2. UNIVERSAL CONVERTER
@@ -183,4 +186,3 @@ elif app_mode == "🔄 Universal Converter":
                     st.download_button("Download", bytes(pdf.output()), "type.pdf")
                 except Exception as e: st.error(e)
             else: st.error("Typewriter.ttf missing")
-                
