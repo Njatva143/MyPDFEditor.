@@ -1,17 +1,4 @@
 import streamlit as st
-
-# ==========================================
-# 🛑 ZARURI PATCH (Version Fixer)
-# Ye code Streamlit ke naye version ko forcefully theek karega
-# ==========================================
-import streamlit.elements.image as st_image
-try:
-    from streamlit.elements.utils import image_to_url
-    st_image.image_to_url = image_to_url
-except ImportError:
-    pass
-# ==========================================
-
 from streamlit_drawable_canvas import st_canvas
 from pdf2image import convert_from_bytes
 from pdf2docx import Converter
@@ -24,6 +11,10 @@ import os
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="PDF Editor & Converter", layout="wide")
 st.title("📄 Professional PDF Tool")
+
+# --- MENU ---
+st.sidebar.title("🚀 Main Menu")
+app_mode = st.sidebar.radio("Go to:", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
 
 # --- HELPER: UNICODE TO KRUTI ---
 def convert_to_kruti(text):
@@ -51,10 +42,6 @@ def convert_to_kruti(text):
     new_text = ""
     for c in text: new_text += mapping.get(c, c)
     return new_text
-
-# --- MENU ---
-st.sidebar.title("🚀 Main Menu")
-app_mode = st.sidebar.radio("Go to:", ["✏️ PDF Direct Editor", "🔄 Universal Converter"])
 
 # ==================================================
 # 1. PDF DIRECT EDITOR
@@ -114,6 +101,7 @@ if app_mode == "✏️ PDF Direct Editor":
                 )
             except Exception as e:
                 st.error(f"Canvas Error: {e}")
+                st.warning("⚠️ Patch failed. You MUST use 'streamlit==1.32.0' in requirements.txt")
 
             # Save Button
             st.markdown("---")
@@ -186,3 +174,4 @@ elif app_mode == "🔄 Universal Converter":
                     st.download_button("Download", bytes(pdf.output()), "type.pdf")
                 except Exception as e: st.error(e)
             else: st.error("Typewriter.ttf missing")
+                
